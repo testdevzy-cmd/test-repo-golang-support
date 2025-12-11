@@ -31,15 +31,21 @@ func main() {
 
 	// Initialize services
 	userService := services.NewUserService()
+	orgService := services.NewOrganizationService()
 
 	// Seed some initial data
-	seedData(userService)
+	seedData(userService, orgService)
 
 	// Initialize handlers
 	handler := handlers.NewHandler(userService, logger)
+	orgHandler := handlers.NewOrgHandler(orgService, logger)
 
 	// Setup routes
 	router := handlers.SetupRoutes(handler, logger)
+
+	// Setup organization routes
+	api := router.PathPrefix("/api/v1").Subrouter()
+	handlers.SetupOrgRoutes(api, orgHandler)
 
 	// Create HTTP server
 	server := &http.Server{
@@ -79,8 +85,8 @@ func main() {
 	logger.Println("Server stopped gracefully")
 }
 
-// seedData adds some initial test users
-func seedData(svc *services.UserService) {
+// seedData adds some initial test users and organizations
+func seedData(userSvc *services.UserService, orgSvc *services.OrganizationService) {
 	ctx := context.Background()
 
 	// Create test users
@@ -103,7 +109,31 @@ func seedData(svc *services.UserService) {
 			u.email,
 		)
 		user.SetRole(u.role)
-		_ = svc.Write(ctx, user)
+		_ = userSvc.Write(ctx, user)
+	}
+
+	// Create test organizations
+	orgs := []*struct {
+		name     string
+		industry string
+		ownerID  string
+	}{
+		{"Acme Corp", "Technology", "user_1"},
+		{"Global Industries", "Manufacturing", "user_2"},
+	}
+
+	for i, o := range orgs {
+		org := services.CreateOrganization(
+			fmt.Sprintf("org_%d", i+1),
+			o.name,
+			o.ownerID,
+		)
+		org.SetIndustry(o.industry)
+		_ = orgSvc.WriteOrg(ctx, org)
+
+		// Add owner as member
+		membership := services.CreateMembership(o.ownerID, org.ID, "owner")
+		_ = orgSvc.AddMember(ctx, membership)
 	}
 }
 

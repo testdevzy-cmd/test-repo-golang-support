@@ -10,6 +10,8 @@ import (
 // Type aliases (using = syntax)
 type UserID = string
 type UserList = []User
+type OrgID = string
+type OrgList = []Organization
 
 // Type definition (not an alias, creates new type)
 type ResponseCode int
@@ -234,4 +236,267 @@ func (p *Profile) SetBio(bio string) {
 func (p *Profile) SetAvatarURL(url string) {
 	p.AvatarURL = url
 	p.UpdatedAt = time.Now()
+}
+
+// =====================================
+// Organization Model (NEW)
+// =====================================
+
+// Address represents a physical address
+// Embeddable struct for composition
+type Address struct {
+	Street     string `json:"street"`
+	City       string `json:"city"`
+	State      string `json:"state"`
+	Country    string `json:"country"`
+	PostalCode string `json:"postal_code"`
+}
+
+// ContactInfo represents contact information
+// Another embeddable struct
+type ContactInfo struct {
+	Phone   string `json:"phone"`
+	Email   string `json:"email"`
+	Website string `json:"website"`
+}
+
+// Organization represents a company or organization
+// Demonstrates multiple struct embeddings
+type Organization struct {
+	BaseEntity              // Embedded struct (composition)
+	Timestamps              // Embedded struct for soft delete
+	Address                 // Embedded struct for address
+	ContactInfo             // Embedded struct for contact
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Industry    string      `json:"industry"`
+	Size        OrgSize     `json:"size"`
+	Active      bool        `json:"active"`
+	OwnerID     UserID      `json:"owner_id"` // Using type alias
+}
+
+// OrgSize represents organization size category
+type OrgSize string
+
+// Organization size constants
+const (
+	OrgSizeSmall      OrgSize = "small"
+	OrgSizeMedium     OrgSize = "medium"
+	OrgSizeLarge      OrgSize = "large"
+	OrgSizeEnterprise OrgSize = "enterprise"
+)
+
+// Membership represents user membership in an organization
+type Membership struct {
+	BaseEntity            // Embedded struct
+	UserID     UserID     `json:"user_id"`
+	OrgID      OrgID      `json:"org_id"`
+	Role       MemberRole `json:"role"`
+	JoinedAt   time.Time  `json:"joined_at"`
+}
+
+// MemberRole represents the role of a member in an organization
+type MemberRole string
+
+// Member role constants
+const (
+	MemberRoleOwner  MemberRole = "owner"
+	MemberRoleAdmin  MemberRole = "admin"
+	MemberRoleMember MemberRole = "member"
+	MemberRoleGuest  MemberRole = "guest"
+)
+
+// =====================================
+// Value Receiver Methods on Organization
+// =====================================
+
+// DisplayName returns the organization display name (value receiver)
+func (o Organization) DisplayName() string {
+	return o.Name
+}
+
+// IsActive checks if organization is active (value receiver)
+func (o Organization) IsActive() bool {
+	return o.Active
+}
+
+// HasWebsite checks if organization has a website (value receiver)
+func (o Organization) HasWebsite() bool {
+	return o.ContactInfo.Website != ""
+}
+
+// FullAddress returns the complete address as a string (value receiver)
+func (o Organization) FullAddress() string {
+	return fmt.Sprintf("%s, %s, %s %s, %s",
+		o.Address.Street,
+		o.Address.City,
+		o.Address.State,
+		o.Address.PostalCode,
+		o.Address.Country,
+	)
+}
+
+// String implements Stringer interface (value receiver)
+func (o Organization) String() string {
+	return fmt.Sprintf("Organization{ID: %s, Name: %s, Industry: %s}", o.ID, o.Name, o.Industry)
+}
+
+// =====================================
+// Pointer Receiver Methods on Organization
+// =====================================
+
+// UpdateName updates the organization name (pointer receiver)
+func (o *Organization) UpdateName(name string) {
+	o.Name = name
+	o.UpdatedAt = time.Now()
+}
+
+// UpdateDescription updates the description (pointer receiver)
+func (o *Organization) UpdateDescription(desc string) {
+	o.Description = desc
+	o.UpdatedAt = time.Now()
+}
+
+// SetIndustry sets the industry (pointer receiver)
+func (o *Organization) SetIndustry(industry string) {
+	o.Industry = industry
+	o.UpdatedAt = time.Now()
+}
+
+// SetSize sets the organization size (pointer receiver)
+func (o *Organization) SetSize(size OrgSize) {
+	o.Size = size
+	o.UpdatedAt = time.Now()
+}
+
+// UpdateAddress updates the address (pointer receiver)
+func (o *Organization) UpdateAddress(addr Address) {
+	o.Address = addr
+	o.UpdatedAt = time.Now()
+}
+
+// UpdateContact updates contact info (pointer receiver)
+func (o *Organization) UpdateContact(contact ContactInfo) {
+	o.ContactInfo = contact
+	o.UpdatedAt = time.Now()
+}
+
+// Deactivate marks organization as inactive (pointer receiver)
+func (o *Organization) Deactivate() {
+	o.Active = false
+	now := time.Now()
+	o.DeletedAt = &now
+	o.UpdatedAt = now
+}
+
+// Activate marks organization as active (pointer receiver)
+func (o *Organization) Activate() {
+	o.Active = true
+	o.DeletedAt = nil
+	o.UpdatedAt = time.Now()
+}
+
+// Serialize converts organization to JSON (pointer receiver)
+func (o *Organization) Serialize() ([]byte, error) {
+	return json.Marshal(o)
+}
+
+// Deserialize populates organization from JSON (pointer receiver)
+func (o *Organization) Deserialize(data []byte) error {
+	return json.Unmarshal(data, o)
+}
+
+// Validate checks if organization data is valid (pointer receiver)
+func (o *Organization) Validate() error {
+	if o.ID == "" {
+		return errors.New("organization ID is required")
+	}
+	if o.Name == "" {
+		return errors.New("organization name is required")
+	}
+	if o.OwnerID == "" {
+		return errors.New("owner ID is required")
+	}
+	return nil
+}
+
+// =====================================
+// Constructor Functions for Organization
+// =====================================
+
+// NewOrganization creates a new Organization with initialized fields
+func NewOrganization(id, name, ownerID string) *Organization {
+	now := time.Now()
+	return &Organization{
+		BaseEntity: BaseEntity{
+			ID:        id,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		Name:    name,
+		OwnerID: ownerID,
+		Active:  true,
+		Size:    OrgSizeSmall,
+	}
+}
+
+// NewMembership creates a new Membership
+func NewMembership(id string, userID UserID, orgID OrgID, role MemberRole) *Membership {
+	now := time.Now()
+	return &Membership{
+		BaseEntity: BaseEntity{
+			ID:        id,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		UserID:   userID,
+		OrgID:    orgID,
+		Role:     role,
+		JoinedAt: now,
+	}
+}
+
+// =====================================
+// Value Receiver Methods on Membership
+// =====================================
+
+// IsOwner checks if membership is owner role (value receiver)
+func (m Membership) IsOwner() bool {
+	return m.Role == MemberRoleOwner
+}
+
+// IsAdmin checks if membership has admin privileges (value receiver)
+func (m Membership) IsAdmin() bool {
+	return m.Role == MemberRoleOwner || m.Role == MemberRoleAdmin
+}
+
+// CanManageMembers checks if member can manage other members (value receiver)
+func (m Membership) CanManageMembers() bool {
+	return m.IsAdmin()
+}
+
+// =====================================
+// Pointer Receiver Methods on Membership
+// =====================================
+
+// ChangeRole changes the membership role (pointer receiver)
+func (m *Membership) ChangeRole(role MemberRole) {
+	m.Role = role
+	m.UpdatedAt = time.Now()
+}
+
+// Promote promotes member to admin (pointer receiver)
+func (m *Membership) Promote() {
+	if m.Role == MemberRoleMember || m.Role == MemberRoleGuest {
+		m.Role = MemberRoleAdmin
+		m.UpdatedAt = time.Now()
+	}
+}
+
+// Demote demotes member from admin (pointer receiver)
+func (m *Membership) Demote() {
+	if m.Role == MemberRoleAdmin {
+		m.Role = MemberRoleMember
+		m.UpdatedAt = time.Now()
+	}
 }
